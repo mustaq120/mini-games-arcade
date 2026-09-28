@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#11152c" />
+    <title>Pixel Bahçesi — Mini Oyunlar</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="site-header">
+        <a class="brand" href="#home" aria-label="Pixel Bahçesi ana sayfa">
+          <span class="brand-mark">✦</span>
+          <span>Pixel Bahçesi</span>
+        </a>
+        <nav class="main-nav" aria-label="Ana navigasyon">
+          <a href="#home" data-route="home">Ana Sayfa</a>
+          <a href="#stats" data-route="stats">İstatistikler</a>
+        </nav>
+        <button class="icon-button" id="theme-toggle" type="button" aria-label="Renk temasını değiştir">☼</button>
+      </header>
+
+      <main id="app" tabindex="-1"></main>
+
+      <footer class="site-footer">
+        <span>⚡ Kısa molalar, büyük skorlar.</span>
+        <span>Skorların bu cihazda saklanır.</span>
+      </footer>
+    </div>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <script src="app.js"></script>
+  </body>
+</html>
