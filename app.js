@@ -10,6 +10,20 @@ const gameInfo = {
   guess: { title: "Sayı Tahmini", icon: "🔢", color: "var(--purple)", description: "Gizli sayıyı en az denemeyle yakala." },
   word: { title: "Kelime Bulmaca", icon: "🔤", color: "var(--mint)", description: "Karışık harfleri doğru sıraya koy." }
 };
+const demoProvinceData = [
+  { province: "Ankara", count: 42, year: "2024", source: "Demo veri" },
+  { province: "İstanbul", count: 31, year: "2024", source: "Demo veri" },
+  { province: "İzmir", count: 18, year: "2024", source: "Demo veri" },
+  { province: "Bursa", count: 12, year: "2024", source: "Demo veri" },
+  { province: "Antalya", count: 9, year: "2024", source: "Demo veri" },
+  { province: "Adana", count: 7, year: "2024", source: "Demo veri" },
+  { province: "Konya", count: 6, year: "2024", source: "Demo veri" },
+  { province: "Samsun", count: 5, year: "2024", source: "Demo veri" },
+  { province: "Kayseri", count: 4, year: "2024", source: "Demo veri" },
+  { province: "Mersin", count: 3, year: "2024", source: "Demo veri" }
+];
+let provinceData = demoProvinceData.map(row => ({ ...row }));
+let provinceDataIsDemo = true;
 let stats = loadStats();
 let activeCleanup = () => {};
 
@@ -35,6 +49,91 @@ function gameFrame(id, inner, subtitle = "Hazır olduğunda başla ve en iyi sko
 function statsPage() {
   setActiveNav("stats"); const entries = Object.entries(gameInfo);
   app.innerHTML = `<section class="panel"><div class="eyebrow">Kişisel salonun</div><h1>İstatistikler</h1><div class="stats-grid"><div class="big-stat"><strong>${stats.plays}</strong><span>Toplam oyun</span></div><div class="big-stat"><strong>${stats.totalScore}</strong><span>Toplam skor</span></div><div class="big-stat"><strong>${Math.max(...entries.map(([id]) => stats.games[id]?.best || 0), 0)}</strong><span>En yüksek skor</span></div></div><h2>Oyun karnesi</h2><div class="score-list">${entries.map(([id, g]) => `<div class="score-item"><span>${g.icon} ${g.title}</span><b>${stats.games[id]?.best || 0} puan · ${stats.games[id]?.plays || 0} oyun</b></div>`).join("")}</div>${stats.plays ? "" : '<div class="empty-state">Henüz bir oyun oynamadın. İlk skorunu bırakmak için salona dön!</div>'}</section>`;
+}
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[char]));
+}
+function normalizeProvinceRow(row) {
+  const province = row.province || row.il || row["İl"] || row["il adı"] || row["Il"];
+  const count = Number(row.count ?? row.sayi ?? row.sayı ?? row["öğrenci sayısı"] ?? row["ogrenci sayisi"] ?? row.value);
+  if (!province || !Number.isFinite(count) || count < 0) return null;
+  return {
+    province: String(province).trim(),
+    count,
+    year: String(row.year || row.yıl || row["Yıl"] || "").trim(),
+    source: String(row.source || row.kaynak || row["Kaynak"] || "").trim()
+  };
+}
+function parseCsv(text) {
+  const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/).filter(line => line.trim());
+  if (!lines.length) return [];
+  const delimiter = lines[0].includes(";") ? ";" : ",";
+  const headers = lines.shift().split(delimiter).map(header => header.trim().toLocaleLowerCase("tr-TR"));
+  return lines.map(line => {
+    const values = line.split(delimiter).map(value => value.trim().replace(/^"|"$/g, ""));
+    return normalizeProvinceRow(Object.fromEntries(headers.map((header, index) => [header, values[index] || ""])));
+  }).filter(Boolean);
+}
+function filteredProvinceData() {
+  const year = document.querySelector("#province-year")?.value || "all";
+  return provinceData.filter(row => year === "all" || !row.year || row.year === year);
+}
+function provinceRowsMarkup(rows) {
+  const sorted = [...rows].sort((a, b) => b.count - a.count || a.province.localeCompare(b.province, "tr")).slice(0, 10);
+  const max = Math.max(...sorted.map(row => row.count), 1);
+  if (!sorted.length) return '<div class="empty-state">Bu yıl için kayıt bulunamadı.</div>';
+  return sorted.map((row, index) => `<li class="province-row"><span class="province-rank">${index + 1}</span><span class="province-name">${escapeHtml(row.province)}</span><span class="province-bar"><i style="width:${Math.max(3, row.count / max * 100)}%"></i></span><b>${row.count.toLocaleString("tr-TR")}</b></li>`).join("");
+}
+function hacettepePage() {
+  setActiveNav("hacettepe");
+  const years = [...new Set(provinceData.map(row => row.year).filter(Boolean))].sort().reverse();
+  const rows = filteredProvinceData();
+  const total = rows.reduce((sum, row) => sum + row.count, 0);
+  const source = provinceDataIsDemo ? "Demo veri — gerçek Hacettepe öğrenci dağılımı değildir." : (rows.find(row => row.source)?.source || "Kullanıcı içe aktarımı");
+  app.innerHTML = `<section class="panel dashboard-panel">
+    <div class="dashboard-heading"><div><div class="eyebrow">Hacettepe Üniversitesi</div><h1>Öğrenciler hangi illerden geliyor?</h1><p>İl bazlı veriyi yükle, yoğunluğu karşılaştır ve paylaşılabilir bir görsel üret.</p></div><span class="data-badge">${provinceDataIsDemo ? "DEMO VERİ" : "KULLANICI VERİSİ"}</span></div>
+    <div class="dashboard-toolbar"><label class="upload-button">CSV / JSON yükle<input id="province-file" type="file" accept=".csv,.json,application/json,text/csv"></label><label class="filter-label" for="province-year">Yıl<select id="province-year"><option value="all">Tüm yıllar</option>${years.map(year => `<option value="${escapeHtml(year)}">${escapeHtml(year)}</option>`).join("")}</select></label><button class="ghost-button" id="reset-province-data" type="button">Demo veriye dön</button></div>
+    <p class="data-note">${escapeHtml(source)} <span id="row-summary">${rows.length} il · ${total.toLocaleString("tr-TR")} öğrenci kaydı</span></p>
+    <div class="dashboard-stats"><div class="big-stat"><strong>${rows.length}</strong><span>Kayıtlı il</span></div><div class="big-stat"><strong>${total.toLocaleString("tr-TR")}</strong><span>Toplam öğrenci</span></div><div class="big-stat"><strong>${rows[0] ? escapeHtml(rows[0].province) : "—"}</strong><span>En yoğun il</span></div></div>
+    <div class="dashboard-grid"><section class="visual-card" id="share-card"><div class="share-header"><div><div class="eyebrow">İl yoğunluk görünümü</div><h2>İlk 10 il</h2></div><span class="share-size">1080 × 1350</span></div><ol class="province-list">${provinceRowsMarkup(rows)}</ol><p class="share-footnote">Kaynak: ${escapeHtml(source)}</p></section><aside class="dashboard-aside"><h2>Çıktı al</h2><p>Bu görünümü sosyal paylaşım için dikey kart olarak dışa aktar.</p><button class="primary-button" id="download-png" type="button">PNG indir</button><button class="ghost-button export-button" id="download-svg" type="button">SVG indir</button><h2 class="how-title">Veriyi hazırlama</h2><ol class="instructions"><li>YÖK Atlas veya kurum içi rapordan il bazında öğrenci sayılarını çıkar.</li><li>Dosyada <code>il,sayi,yil,kaynak</code> sütunlarını kullan.</li><li>CSV’de virgül ya da noktalı virgül; JSON’da satır dizisi yükle.</li></ol><details><summary>Örnek formatlar</summary><pre>il,sayi,yil,kaynak
+Ankara,120,2023,YÖK Atlas</pre><pre>[{"il":"Ankara","sayi":120,"yil":"2023"}]</pre></details></aside></div>
+  </section>`;
+  document.querySelector("#province-year").addEventListener("change", () => renderProvinceResults());
+  document.querySelector("#province-file").addEventListener("change", handleProvinceFile);
+  document.querySelector("#reset-province-data").addEventListener("click", () => { provinceData = demoProvinceData.map(row => ({ ...row })); provinceDataIsDemo = true; hacettepePage(); });
+  document.querySelector("#download-png").addEventListener("click", downloadProvincePng);
+  document.querySelector("#download-svg").addEventListener("click", downloadProvinceSvg);
+}
+function renderProvinceResults() {
+  const rows = filteredProvinceData(), total = rows.reduce((sum, row) => sum + row.count, 0);
+  document.querySelector(".province-list").innerHTML = provinceRowsMarkup(rows);
+  document.querySelector("#row-summary").textContent = `${rows.length} il · ${total.toLocaleString("tr-TR")} öğrenci kaydı`;
+  document.querySelector(".dashboard-stats").innerHTML = `<div class="big-stat"><strong>${rows.length}</strong><span>Kayıtlı il</span></div><div class="big-stat"><strong>${total.toLocaleString("tr-TR")}</strong><span>Toplam öğrenci</span></div><div class="big-stat"><strong>${rows[0] ? escapeHtml([...rows].sort((a, b) => b.count - a.count)[0].province) : "—"}</strong><span>En yoğun il</span></div>`;
+}
+function handleProvinceFile(event) {
+  const file = event.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const parsed = file.name.toLocaleLowerCase("tr-TR").endsWith(".json") ? JSON.parse(reader.result) : parseCsv(reader.result);
+      const rows = (Array.isArray(parsed) ? parsed : parsed.data || []).map(normalizeProvinceRow).filter(Boolean);
+      if (!rows.length) throw new Error("Geçerli il ve sayı sütunu bulunamadı.");
+      provinceData = rows; provinceDataIsDemo = false; hacettepePage(); showToast(`${rows.length} il kaydı yüklendi.`);
+    } catch (error) { showToast(`Dosya okunamadı: ${error.message}`); }
+  };
+  reader.readAsText(file, "UTF-8");
+}
+function downloadProvinceSvg() {
+  const rows = filteredProvinceData().sort((a, b) => b.count - a.count).slice(0, 10), max = Math.max(...rows.map(row => row.count), 1);
+  const lines = rows.map((row, index) => `<text x="100" y="${290 + index * 82}" fill="#33235d" font-size="30" font-family="Arial">${index + 1}. ${escapeHtml(row.province)}</text><rect x="500" y="${263 + index * 82}" width="${Math.max(8, row.count / max * 430)}" height="34" rx="17" fill="#8b5cf6"/><text x="970" y="${290 + index * 82}" text-anchor="end" fill="#33235d" font-size="28" font-family="Arial">${row.count}</text>`).join("");
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1350" viewBox="0 0 1080 1350"><rect width="1080" height="1350" fill="#f7f3ff"/><text x="80" y="110" fill="#6d28d9" font-size="24" font-family="Arial" font-weight="bold">HACETTEPE ÜNİVERSİTESİ</text><text x="80" y="180" fill="#33235d" font-size="54" font-family="Arial" font-weight="bold">Öğrenciler hangi illerden geliyor?</text>${lines}<text x="80" y="1200" fill="#675f7e" font-size="22" font-family="Arial">Kaynak: ${escapeHtml(provinceDataIsDemo ? "Demo veri" : "Kullanıcı içe aktarımı")}</text></svg>`;
+  const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" })); const link = document.createElement("a"); link.href = url; link.download = "hacettepe-il-dagilimi.svg"; link.click(); URL.revokeObjectURL(url);
+}
+function downloadProvincePng() {
+  const canvas = document.createElement("canvas"); canvas.width = 1080; canvas.height = 1350; const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#f7f3ff"; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.fillStyle = "#6d28d9"; ctx.font = "bold 24px Arial"; ctx.fillText("HACETTEPE ÜNİVERSİTESİ", 80, 110); ctx.fillStyle = "#33235d"; ctx.font = "bold 46px Arial"; ctx.fillText("Öğrenciler hangi illerden geliyor?", 80, 180);
+  const rows = filteredProvinceData().sort((a, b) => b.count - a.count).slice(0, 10), max = Math.max(...rows.map(row => row.count), 1); rows.forEach((row, index) => { const y = 290 + index * 82; ctx.font = "30px Arial"; ctx.fillText(`${index + 1}. ${row.province}`, 100, y); ctx.fillStyle = "#8b5cf6"; ctx.fillRect(500, y - 27, Math.max(8, row.count / max * 430), 34); ctx.fillStyle = "#33235d"; ctx.textAlign = "right"; ctx.fillText(row.count, 970, y); ctx.textAlign = "left"; }); ctx.fillStyle = "#675f7e"; ctx.font = "22px Arial"; ctx.fillText(`Kaynak: ${provinceDataIsDemo ? "Demo veri" : "Kullanıcı içe aktarımı"}`, 80, 1200);
+  const link = document.createElement("a"); link.download = "hacettepe-il-dagilimi.png"; link.href = canvas.toDataURL("image/png"); link.click();
 }
 function startGame(id) {
   if (!gameInfo[id]) return home();
@@ -104,7 +203,7 @@ function snakeGame() {
   document.addEventListener("keydown", keyHandler); document.querySelectorAll("[data-direction]").forEach(button => button.addEventListener("click", controlHandler)); canvas.addEventListener("touchstart", touchStartHandler, {passive:true}); canvas.addEventListener("touchend", touchEndHandler, {passive:true});
   activeCleanup = () => { clearInterval(timer); document.removeEventListener("keydown", keyHandler); document.querySelectorAll("[data-direction]").forEach(button => button.removeEventListener("click", controlHandler)); canvas.removeEventListener("touchstart", touchStartHandler); canvas.removeEventListener("touchend", touchEndHandler); }; draw(); bindRestart(snakeGame);
 }
-function route() { activeCleanup(); activeCleanup = () => {}; const hash = location.hash.slice(1) || "home"; if (hash === "home") home(); else if (hash === "stats") statsPage(); else if (hash.startsWith("game/")) startGame(hash.split("/")[1]); else home(); app.focus(); }
+function route() { activeCleanup(); activeCleanup = () => {}; const hash = location.hash.slice(1) || "home"; if (hash === "home") home(); else if (hash === "stats") statsPage(); else if (hash === "hacettepe") hacettepePage(); else if (hash.startsWith("game/")) startGame(hash.split("/")[1]); else home(); app.focus(); }
 window.addEventListener("hashchange", route); document.querySelector("#theme-toggle").addEventListener("click", () => { document.body.classList.toggle("light"); localStorage.setItem("pixel-theme", document.body.classList.contains("light") ? "light" : "dark"); });
 if (localStorage.getItem("pixel-theme") === "light") document.body.classList.add("light");
 route();
